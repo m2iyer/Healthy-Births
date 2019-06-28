@@ -1,0 +1,256 @@
+---
+title: "331_Project_Final"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#We use the dataset chds_births as our initial dataset
+
+birth <- read.csv("chds_births.csv")
+
+#We then eliminate the father's weight and height since over 40% of the data for the two variates comprises of NAs- hence cannot affect #the overall weight of the child
+
+births <- read.csv("chds_births2.csv")
+
+#Creating a new data frame with no NAs. The method of imputation that has been chosen is described under **IMPUTATION** . The imputed dataset is called no_na_births. The process of handling NAs throughout the dataframe has been described as well.
+library(plyr)
+impute.med <- function(x) replace(x, is.na(x), median(x, na.rm = TRUE))
+no_na_births<- sapply(births, function(x) { if(is.numeric(x)) impute.med(x) else x }
+)
+
+no_na_births = data.frame(no_na_births)
+summary(no_na_births)
+```
+
+**SUMMARY**
+
+In this report we look to find a relationship between a baby's birth weight and the socio-economic and health factors affecting the parents of the child. The dataset analyzed is information on 1236  healthy male single-fetus births collected as part of the Child Health and Development Studies (CHDS) of women enrolled in the Kaiser Foundation Health Plan in the San Francisco/East Bay area between 1960-1967. Our particular interest was the effect of a mother's smoking habits on the health of the child - which is determined by the weight. We created two models; one that only focusses on the effects of smoking habits, and the other which considers all possible factors and automatically builds the best fitting model. In comparing these two models, we found that ethnicity and BMI of the mother have a greater effect on the birth weight than the presence of smoking, although smoking does have a negative effect on the birth weight of the baby. We have used techniques like list imputation, mean imputation and elimination of variables to handle the lack of observations , changed the values of categorical variables and suggested a model that fits our overall theme as well. IN our finding, we conclude that smkoing negatively effects the health of the child. 
+
+```{r}
+#Before moving forward, we first introduce a few new values. We convert the Fathers and mothers ethinicity from 0-5 for Caucasians to only #0
+no_na_births$meth[no_na_births$meth == 1] <- 0
+no_na_births$meth[no_na_births$meth == 2] <- 0
+no_na_births$meth[no_na_births$meth == 3] <- 0
+no_na_births$meth[no_na_births$meth == 4] <- 0
+no_na_births$meth[no_na_births$meth == 5] <- 0
+
+no_na_births$feth[no_na_births$feth == 1] <- 0
+no_na_births$feth[no_na_births$feth == 2] <- 0
+no_na_births$feth[no_na_births$feth == 3] <- 0
+no_na_births$feth[no_na_births$feth == 4] <- 0
+no_na_births$feth[no_na_births$feth == 5] <- 0
+
+#initializing categorical variables
+no_na_births$feth <- as.factor(no_na_births$feth)
+no_na_births$meth <- as.factor(no_na_births$meth)
+no_na_births$income <- as.factor(no_na_births$income)
+
+#We also introduce the BMI Variable. This variable is a combination of the mothers height and weight
+## Change mht and mwt to BMI
+no_na_births$bmi <- (no_na_births$mwt/2.2)/((no_na_births$mht*2.54/100)^2)
+
+## change categoricals to words for the duration of smoking for the mother
+timecats <-c("never","still smokes","during pregnancy","less than year","1-2 yrs","2-3 yrs","3-4 yrs","5-9 yrs",">10 yrs","quit unknown")
+no_na_births$time_cat <- timecats[no_na_births$time+1]
+
+```
+
+**DATA DIAGNOSTICS**
+
+The primary mode of data diagnostics for immediately determining which covariates would affect the health of the child is through the use of pair plots. 
+
+```{r,echo = FALSE, fig.pos = "!htb", out.width = "\\textwidth", fig.cap = "Completed pairs plot of imputed dataset"}
+pairs(~wt + gestation + parity + bmi + time + smoke + meth + feth + marital + income + med + fed, data=no_na_births, cex = 0.25)
+```
+
+
+# **Handling of NA's**
+
+Before performing our analysis, we must first handle the missing values throughout the dataset in order to suppress their effect on results. Our handling of NA's in the dataset was completed in three steps:
+
+## Remove fathers weight and fathers height (fwt and fht) 
+These two variables are the most sparse of the dataset, each missing values for about 40% of observations. Since such a large portion of the dataset is missing, it is not reliable to use imputation or other methods to approximate the missing values since we will hten have to be accounting for a very large bias in our data. It would also be unwise to throw out the observations missing values as removal of such a large portion of observations could bias the results. So, all the entries of the two variables were removed from analysis. 
+
+## Remove observations with a significant portion of missing data
+We chose to also remove observations which had sparse datasets (missing values for more than 10% of the remaining covariates). It is general practice to throw out up to 10% of observations which have poor data; we removed 41 observations which accounts for only 3% of observations. This process is otherwise known as list imputations (where rows of observations are removed if the adata provided is too sparse).
+
+## Perform imputation to estimate values for the remaining NAs
+The last step in handling NAs was performing imputation on the data used in our two selected models. The type of imputation that was chosen was mean imputation . There are two different types of imputation - multiple and single imputation. The reason we had chosen mean imputatiion is because it entails for the least amount of bias and also is the safest option to fill out missing observations and not undually affect the models we created.
+
+# Removed Covariates
+
+It does not make logical sense to consider all variables in our analysis. 
+First, it is clear that time spent smoking (time) is analogous to whether or not the mother smoked during the pregnancy (smoke); We assume that since there are no errors in data collection (for instance if smoke = 0, then time = 0) the categories of never smoking and smoking during pregnancy will hold identical values for all observations including time. The third category of smoke, "used to/not anymore" will break down into the remaining categories of time. Thus, we only consider the more detailed time.
+
+```{r, echo = FALSE, fig.pos = "!htb", out.width = "\\textwidth", fig.cap = "Smoke vs Time: Linear relationship across analogous categories"}
+plot(smoke ~ time, data=no_na_births)
+```
+
+As for number, this variable does not offer enough information to be useful in our analysis. We have that 43% of observations never smoked, making the remaining categories of number too small to properly perform an analysis. Categories 6 (30-39 a day), 7 (40-60 a day), and 8 (more than 60 a day) all hold less than 2% of the dataset. While there were some negative association found between birth weight and higher number of cigarettes, since there are so few observations they should instead be considered outliers, thus these results are not valid in our study. 
+
+There are also other variables with very high correlation, and as a result one of the main effects or their interaction was removed from analysis - Father's ethnicity (feth) and mother's ethnicity (meth) are matched in 70% of observations
+
+#**MODEL DIAGNOSTICS**
+
+Model 1
+
+In the first model, we focused specifically on the covariates relating to the mother's smoking habits. There are 3 covariates relating to smoking:
+
+* smoke: Does the mother smoke at time of pregnancy? 
+0 = never, 1 = smokes now, 2 = until pregnancy,3 = used to, not anymore
+* time: Time since the mother quit smoking before pregnancy: 
+0 = never smoked, 1 = still smokes, 2 = during pregnancy, 3 = less than a year, 4 = 1-2 years, 5 = 2-3 years, 6 = 3-4 years, 7 = 5-9 years, 8 = more than 10 years, 9 = quit but don't know when.
+* number: Number of cigarettes smoked per day by mother when she was smoking:
+0 = never smoked,1 = 1-4, 2 = 5-9, 3 = 10-14, 4 = 15-19, 5 = 20-29, 6 = 30-39, 7 = 40-60, 8 = more than 60, 9 = smoked but don't know how much
+
+Our analysis of this model will also include the following covariates:
+
+wt: The birth weight (ounces)
+gestation: The length of the gestation period (days) 
+
+We model weight against time and gestation. The inclusion of gestation will account for other physical health factors of the mother; we found that the gestation time is highly correlated to the mother's BMI.
+```{r,echo = FALSE, fig.pos = "!htb", out.width = "\\textwidth", fig.cap = "Gestational period vs Mother's BMI: Positive correlation between covariates"}
+
+plot(gestation~bmi, data = no_na_births)
+```
+We do not have data relating to other factors of the mother's health that could affect the size of the baby but we assume that they would be related to a premature birth and thus be captured in the gestation data.
+
+In order to facilitate analysis, we convert the variable time to a categorical variable called time_cat. The produced model is: 
+
+```{r}
+chds_births <- no_na_births[c(1:5, 9, 12, 13, 17:18)]
+
+# Birth weight modelled against time smoking and gestation, including interaction effects
+M1 <- lm(wt ~ 0 + time_cat + gestation + time_cat:gestation, data = chds_births)
+summary(M1)
+```
+
+
+From the summary output, the most significant effect comes from time_cat = still smokes - mothers who smoked during their pregnancy - with estimate -51.59 and p-value 0.000221. So, smoking through the pregnancy has a very high negative effect on the birth weight.
+
+Another significant effect comes from the opposite spectrum, time_cat = never,  for mothers who had never smoked - with estimate 34.855 and  p_value 0.0036. So, having never smoked has an almost opposite effect on the baby's weight; a nearly equally as high positive effect. 
+The last significant effect is gestation. While we would perhaps expect the gestation time to be most significant, it is in fact less significant in the presence of time, with p-value 0.021833. 
+
+So, based on this model, we would conclude that having smoked through the pregnancy has a very negative effect on the birth weight of the baby, whereas having never smoked is associated with a higher birth weight.
+
+
+**Model 2**
+
+For the second model we utilized stepwise automated model selection. All three automated models were generated and then inspected. Since the forward selection model is nested within the stepwise model, and the stepwise model is nested within the backwards model, we can use an F-test to determine which one is best to use. The number of co-efficients for the automated models are as follows - foward-selection model (28), stepwise-selection (30) and backward-selction model (45) after taking into account categoricals and interaction effect.
+
+```{r}
+#Maximal model used for automated model selection
+MQ <- lm(wt~(. - marital - income - time_cat)^2 - feth:bmi - 
+           meth:feth + marital + income + time_cat + time_cat:gestation, data=chds_births)
+#Minimal model (intrercept only) used for automated model selection
+M0 <- lm(wt~1, data = chds_births)
+
+#Used to check that there are no NAs in the model
+# beta.max <- coef(MQ)
+# names(beta.max)[is.na(beta.max)]
+# anyNA(coef(MQ))
+
+MStart <- lm(wt~., data=chds_births)
+# time and smoke were taken out
+
+  Mfwd <- step(object =M0,
+               scope = list(lower = M0, upper = MQ),
+               direction = "forward",
+               trace = FALSE)
+  
+
+  Mbck <- step(object =MQ,
+               scope = list(lower = M0, upper = MQ),
+               direction = "backward",
+               trace = FALSE)
+  
+
+
+  Mstp <- step(object =MStart,
+               scope = list(lower = M0, upper = MQ),
+               direction = "both",
+               trace = FALSE)
+  
+
+```
+
+F-tests were conducted between all three models, with the table as follows:
+
+```{r}
+anova(Mfwd,Mstp)
+anova(Mstp,Mbck)
+anova(Mfwd,Mbck)
+```
+
+It can be seen that there is a high f-value between forward and step, with the F-value being close to 5, indicating that we can reject the null hypothesis that the extra covariate - in this case mother's age - has no effect. This can additionally be validated by the p-value of 0.07, where we rejeect the null hypothesis as well. Thus we select stepwise model over the forward model and continue testing against backwards model, also using an F-test. Between the two models, only mage - mother's age - is added to the stepwise model.
+
+On the other hand, the f-values between backwards and stepwise model is a mere 1.5, with a p-value of 0.07. Since this is over the significance value of 0.05, we cannot reject the null hypothesis that the extra covariates present in the model generated through backwards elimination is equal to zero. This means we can reject the backwards model in favor of the stepwise model. We can further see this through the F-value conducted between the forward model and the backwards model. The F-value is slightly higher at 1.98 with a p-value or 0.009, indicating that we reject the null hypothesis that all the extra covariates have a slope of 0. This indicates that there are covariates which have a non-zero effect on the accuracy of the models, but not enough to significant alter the prediction power between the two models - in other words very little of the covariates have a non-zero effect.
+
+
+**MODEL DIAGNOSTICS**
+
+Based on the results of the cross validation, we conclude that Model 2 is a slightly better fit than Model 1. These results are also confirmed by comparing the A1C levels of both models and the F-statistic.
+
+
+#Significant factors
+
+The most significant positive factors on birth weight are the number of previous pregnancies (parity) and the mother's BMI. While the number of previous pregnancies has a higher p-value of 0.000425, it has a significantly smaller beta and thus less effect on the birth weight than BMI. These results may be skewed by the low numbers in most categories within parity; categories of 8 or more previous pregnancies have less than 10 observations per category. So, we would conclude with more certainty that in fact BMI has the more significant effect, with beta value 5.108 and p-value 0.042343. 
+
+```{r,echo = FALSE, fig.pos = "!htb", out.width = "\\textwidth", fig.cap = "Mother's BMI vs Birth Weight: Positive Correlation between covariates"}
+plot(wt~bmi, data= no_na_births)
+```
+
+The most significant negative factors come from the father's ethnicity. The model shows that children with African-American or Asian fathers have a lower birth weight. However, as mentioned earlier, 70% of the observations have the same ethnicity in both the father and the mother - and in particular, 94% of observations with African American fathers also have African American mothers, and 91% with Asian fathers have an Asian mother. So, it is unclear whether the effect on birth weight comes solely from the father as the model suggests, or is also affected by the mother. 
+```{r,echo = FALSE, fig.pos = "!htb", out.width = "\\textwidth", fig.cap = "Father's Ethnicity vs Birth weight: Categories 7 and 8 have visibly lower average birth weights than other ethnic groups"}
+
+plot(no_na_births$feth,no_na_births$wt)
+```
+The model did not find any significance with smoking in the presence of these more significant factors.
+
+
+**DISCUSSION**
+
+There are external research studies which supports the findings of our analysis. A study by Ruth E. Zambrana in 1999 found that African American women have shorter gestation periods and lower birth weights, agreeing with the relationship found between African-American parents and lower weights in our analysis. 
+
+There is outside research that has found an association between maternal smoking and lower birth weight. For example, a Taiwanese study published in 2014 found the association, particularly with mothers who smoked more than 20 cigarettes a day. 
+
+#Behavioural and lifestyle observations:
+
+There is a relation between BMI and the health of the child. For this reason, the mother must ensure that her BMI is well balanced. To show this , we use the averages of the continuous co-variates and use the mode of the categorical variables to predict the BMI for "unhealthier" children. We used the lower bounds of weights for babies (88 ounces) to find that the average BMI that a mother should not go below 19.8 . It is also interesting to note that 77.8% of mothers with "unhealthy" babies continued to smoke during the pregnancy, according to the data gathered.The recommendations will be for parents to maintain a healthier lifestyle (according to their BMI) and to avoid smoking completely during the duration of the pregnancy. In this case, we are unaware if mother indulged in consuming alcohol or drugs during the duration of the pregnancy. 
+
+#Possible bias due to study design
+We have not considered what "healthy" would mean for a child beyond the scope of the birth weight of the child. This could also probably skew our understanding of what is considered to be a healthy baby. 
+
+#Effect of smoking while pregnant on the health of the child
+A study by Sven Cnattingius published in Nicotine & Tobacco Research (citation below) found that smoking during pregnancy can slow fetal growth, as our analysis found, but additionally that it can cause increased fetal death, stillbirth and sudden infant death syndrome. While the focus of our analysis was birth weight and not fetal death, the relationship between smoking during pregnancy and fetal death could affect our results since if many babies whose mothers smoked during pregnancy do not survive, our cohort is not representative of all children born to mothers who are smokers. 
+
+#p-value of co-effcients in the final model
+
+
+#Outlying Observations
+
+#Deficiencies of the final model
+
+
+4. Conclusions
+To summarize our analysis, we first used list inputations to remove unusable observations and cleaned the dataset using mean imputation. We removed covariates that had high correlations to avoid interference in the regression model. After building our two models, we used cross validation and comparative measures to conclude that the automated stepwise model was the best choice for modelling birth weight.
+
+Based on our analysis, the mother's BMI and the parent's ethnicity  have the most significant effect on birth weight. In the presence of these other factors, smoking before or throughout the pregnancy does not have a significant effect, although outside research does find that it can have a negative effect on birth weight. 
+
+
+
+
+
+**CITATIONS**
+
+Zambrana, R.E., Dunkel-Schetter, C., Collins, N.L. et al. J Urban Health (1999) 76: 102. https://doi.org/10.1007/BF02344465
+
+Parental Smoking During Pregnancy and Its Association with Low Birth Weight, Small for Gestational Age, and Preterm Birth Offspring: A Birth Cohort Study, Ko, Ting-Jung et al.Pediatrics & Neonatology , Volume 55 , Issue 1 , 20 - 27
+
+Sven Cnattingius; The epidemiology of smoking during pregnancy: Smoking prevalence, maternal characteristics, and pregnancy outcomes, Nicotine & Tobacco Research, Volume 6, Issue Suppl_2, 1 April 2004, Pages S125-S140, https://doi.org/10.1080/14622200410001669187
+
+
